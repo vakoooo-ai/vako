@@ -10,31 +10,31 @@
 
 body{
   margin:0;
-  font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   background:#f5f6f8;
-  color:#222
+  color:#222;
 }
 
 header{
   background:#111827;
   color:white;
-  padding:22px 16px
+  padding:22px 16px;
 }
 
 header h1{
   margin:0;
-  font-size:24px
+  font-size:24px;
 }
 
 header p{
   margin:6px 0 0;
-  color:#cbd5e1
+  color:#cbd5e1;
 }
 
 main{
   max-width:700px;
   margin:auto;
-  padding:15px 15px 80px
+  padding:15px 15px 80px;
 }
 
 .card{
@@ -42,106 +42,117 @@ main{
   border-radius:16px;
   padding:16px;
   margin-bottom:15px;
-  box-shadow:0 2px 10px #0001
+  box-shadow:0 2px 10px #0001;
 }
 
 h2{
   font-size:18px;
-  margin:0 0 14px
+  margin:0 0 14px;
 }
 
 label{
   display:block;
   font-size:13px;
   color:#666;
-  margin:10px 0 5px
+  margin:10px 0 5px;
 }
 
 input,textarea,button{
-  font:inherit
+  font:inherit;
 }
 
 input,textarea{
   width:100%;
   padding:12px;
   border:1px solid #ddd;
-  border-radius:10px
+  border-radius:10px;
 }
 
 textarea{
-  min-height:70px
+  min-height:70px;
 }
 
 button{
   border:0;
   border-radius:10px;
   padding:12px 16px;
-  font-weight:bold
+  font-weight:bold;
+  cursor:pointer;
 }
 
 .primary{
   background:#111827;
-  color:white
-}
-
-.gray{
-  background:#eef0f3
+  color:white;
 }
 
 .row{
   display:flex;
-  gap:10px
+  gap:10px;
 }
 
 .row>*{
-  flex:1
+  flex:1;
 }
 
 .stats{
   display:grid;
   grid-template-columns:repeat(3,1fr);
-  gap:8px
+  gap:8px;
 }
 
 .stat{
   background:#f5f6f8;
   border-radius:10px;
   padding:12px;
-  text-align:center
+  text-align:center;
 }
 
 .stat b{
   font-size:22px;
-  display:block
+  display:block;
 }
 
 .stat span{
   font-size:12px;
-  color:#777
+  color:#777;
 }
 
 .item{
   border-top:1px solid #eee;
-  padding:12px 0
+  padding:12px 0;
 }
 
 .item:first-child{
-  border-top:0
+  border-top:0;
 }
 
 .name{
-  font-weight:bold
+  font-weight:bold;
 }
 
 .meta{
   font-size:13px;
   color:#666;
-  line-height:1.7
+  line-height:1.7;
 }
 
 #reader{
   width:100%;
-  margin-bottom:10px
+  margin-bottom:10px;
+}
+
+.status{
+  margin-top:10px;
+  padding:10px;
+  border-radius:8px;
+  background:#f5f6f8;
+  font-size:13px;
+}
+
+@media(max-width:500px){
+  .row{
+    flex-direction:column;
+  }
 }
 </style>
 </head>
@@ -150,7 +161,7 @@ button{
 
 <header>
 <h1>📦 扫码入库</h1>
-<p>你的库存管理系统</p >
+<p>云端库存管理系统</p >
 </header>
 
 <main>
@@ -192,6 +203,10 @@ button{
 ＋ 确认入库
 </button>
 
+<div id="status" class="status">
+正在连接云端数据库……
+</div>
+
 </div>
 
 
@@ -213,7 +228,7 @@ button{
 
 <div class="stat">
 <b id="records">0</b>
-<span>入库记录</span>
+<span>商品记录</span>
 </div>
 
 </div>
@@ -234,216 +249,648 @@ button{
 </main>
 
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <script src="https://unpkg.com/html5-qrcode"></script>
+
 
 <script>
 
-let data=JSON.parse(
-  localStorage.getItem("inventory")||"[]"
+/* =================================
+   Supabase 配置
+   ================================= */
+
+const SUPABASE_URL =
+"https://nqtevviqbamkugypaxvm.supabase.co";
+
+const SUPABASE_KEY =
+"sb_publishable_YMqSkCakd4SFe99USOfXEg_6QcjjMB9";
+
+
+const supabaseClient =
+window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
 );
 
-const $=id=>document.getElementById(id);
+
+/* =================================
+   页面元素
+   ================================= */
+
+const $ = id =>
+document.getElementById(id);
 
 
-function save(){
+/* =================================
+   状态
+   ================================= */
 
-  localStorage.setItem(
-    "inventory",
-    JSON.stringify(data)
-  );
+function setStatus(message){
 
-  render();
+  $("status").textContent = message;
 
 }
 
 
-function render(){
+/* =================================
+   读取库存
+   ================================= */
 
-  let map={};
+async function loadInventory(){
 
-  data.forEach(x=>{
+  setStatus("正在读取云端库存……");
 
-    let key=x.sku||x.name;
+  const {
+    data,
+    error
+  } = await supabaseClient
+    .from("products")
+    .select("*")
+    .order("created_at", {
+      ascending:false
+    });
+
+
+  if(error){
+
+    console.error(error);
+
+    setStatus(
+      "读取失败：" + error.message
+    );
+
+    return [];
+
+  }
+
+
+  return data || [];
+
+}
+
+
+/* =================================
+   显示库存
+   ================================= */
+
+async function render(){
+
+  const data =
+    await loadInventory();
+
+
+  let map = {};
+
+
+  data.forEach(item => {
+
+    const key =
+      item.sku ||
+      item.name ||
+      item.id;
+
 
     if(!map[key]){
 
-      map[key]={
-        sku:x.sku,
-        name:x.name,
-        location:x.location,
-        qty:0
+      map[key] = {
+
+        sku:item.sku || "",
+
+        name:item.name || "",
+
+        location:item.location || "",
+
+        quantity:0
+
       };
 
     }
 
-    map[key].qty+=Number(x.qty);
+
+    map[key].quantity +=
+      Number(item.quantity || 0);
 
   });
 
 
-  let search=$("search").value.toLowerCase();
+  const search =
+    $("search").value
+      .trim()
+      .toLowerCase();
 
 
-  let items=Object.values(map).filter(x=>
-    (`${x.sku} ${x.name} ${x.location}`)
-    .toLowerCase()
-    .includes(search)
-  );
+  const items =
+    Object.values(map).filter(item => {
+
+      return (
+
+        `${item.sku}
+         ${item.name}
+         ${item.location}`
+
+      )
+      .toLowerCase()
+      .includes(search);
+
+    });
 
 
-  $("types").textContent=
+  $("types").textContent =
     Object.keys(map).length;
 
 
-  $("total").textContent=
+  $("total").textContent =
     data.reduce(
-      (a,x)=>a+Number(x.qty),
+      (sum,item) =>
+        sum + Number(item.quantity || 0),
       0
     );
 
 
-  $("records").textContent=
+  $("records").textContent =
     data.length;
 
 
-  $("list").innerHTML=items.length?
+  if(items.length === 0){
 
-    items.map(x=>`
+    $("list").innerHTML =
+      "<p style='text-align:center;color:#888'>暂无库存</p >";
+
+    return;
+
+  }
+
+
+  $("list").innerHTML =
+
+    items.map(item => `
 
       <div class="item">
 
         <div class="name">
-          ${x.name||"未命名商品"}
+          ${escapeHtml(
+            item.name || "未命名商品"
+          )}
         </div>
 
         <div class="meta">
-          SKU：${x.sku||"-"}<br>
-          仓位：${x.location||"-"}<br>
-          库存：<b>${x.qty}</b>
+
+          SKU：
+          ${escapeHtml(
+            item.sku || "-"
+          )}
+
+          <br>
+
+          仓位：
+          ${escapeHtml(
+            item.location || "-"
+          )}
+
+          <br>
+
+          库存：
+          <b>${item.quantity}</b>
+
         </div>
 
       </div>
 
-    `).join("")
-
-    :
-
-    "<p style='text-align:center;color:#888'>暂无库存</p >";
+    `).join("");
 
 }
 
 
-$("add").onclick=()=>{
+/* =================================
+   防止特殊字符
+   ================================= */
 
-  let sku=$("sku").value.trim();
+function escapeHtml(value){
 
-  let name=$("name").value.trim();
+  return String(value)
 
-  let qty=Number($("qty").value);
+    .replaceAll("&","&amp;")
+
+    .replaceAll("<","&lt;")
+
+    .replaceAll(">","&gt;")
+
+    .replaceAll('"',"&quot;")
+
+    .replaceAll("'","&#039;");
+
+}
 
 
-  if(!sku&&!name){
+/* =================================
+   输入 SKU 后查询商品
+   ================================= */
 
-    alert("请输入 SKU 或商品名称");
+let searchTimer = null;
+
+
+$("sku").addEventListener(
+  "input",
+  function(){
+
+    clearTimeout(searchTimer);
+
+
+    searchTimer =
+      setTimeout(
+        findProduct,
+        400
+      );
+
+  }
+);
+
+
+async function findProduct(){
+
+  const sku =
+    $("sku").value.trim();
+
+
+  if(!sku){
 
     return;
 
   }
 
 
-  if(qty<1){
+  setStatus(
+    "正在查询商品……"
+  );
 
-    alert("数量必须大于0");
+
+  const {
+    data,
+    error
+  } = await supabaseClient
+
+    .from("products")
+
+    .select("*")
+
+    .eq("sku",sku)
+
+    .order("created_at",{
+      ascending:false
+    })
+
+    .limit(1);
+
+
+  if(error){
+
+    console.error(error);
+
+    setStatus(
+      "查询失败：" +
+      error.message
+    );
 
     return;
 
   }
 
 
-  data.unshift({
+  if(data && data.length > 0){
 
-    sku:sku,
-
-    name:name,
-
-    qty:qty,
-
-    location:$("location").value.trim(),
-
-    note:$("note").value.trim(),
-
-    time:new Date().toISOString()
-
-  });
+    const product =
+      data[0];
 
 
-  save();
+    $("name").value =
+      product.name || "";
 
 
-  $("qty").value=1;
+    $("location").value =
+      product.location || "";
 
-  $("note").value="";
+
+    setStatus(
+      "找到商品：" +
+      (product.name || "未命名商品") +
+      "｜当前库存：" +
+      (product.quantity || 0)
+    );
+
+  }else{
+
+    setStatus(
+      "没有找到这个 SKU，可以创建新商品"
+    );
+
+  }
+
+}
 
 
-  alert("入库成功！");
+/* =================================
+   确认入库
+   ================================= */
+
+$("add").onclick =
+async function(){
+
+  const sku =
+    $("sku").value.trim();
+
+
+  const name =
+    $("name").value.trim();
+
+
+  const quantity =
+    Number($("qty").value);
+
+
+  const location =
+    $("location").value.trim();
+
+
+  if(!sku){
+
+    alert(
+      "请输入 SKU 或扫描条码"
+    );
+
+    return;
+
+  }
+
+
+  if(!name){
+
+    alert(
+      "请输入商品名称"
+    );
+
+    return;
+
+  }
+
+
+  if(quantity < 1){
+
+    alert(
+      "数量必须大于 0"
+    );
+
+    return;
+
+  }
+
+
+  setStatus(
+    "正在保存到云端……"
+  );
+
+
+  /* 查询是否已经存在 */
+
+  const {
+    data:existing,
+    error:findError
+  } = await supabaseClient
+
+    .from("products")
+
+    .select("*")
+
+    .eq("sku",sku)
+
+    .order("created_at",{
+      ascending:false
+    })
+
+    .limit(1);
+
+
+  if(findError){
+
+    alert(
+      "查询失败：" +
+      findError.message
+    );
+
+    return;
+
+  }
+
+
+  /* 已经存在：增加库存 */
+
+  if(existing && existing.length > 0){
+
+    const product =
+      existing[0];
+
+
+    const newQuantity =
+      Number(product.quantity || 0)
+      + quantity;
+
+
+    const {
+      error:updateError
+    } = await supabaseClient
+
+      .from("products")
+
+      .update({
+
+        name:name,
+
+        quantity:newQuantity,
+
+        location:
+          location ||
+          product.location
+
+      })
+
+      .eq("id",product.id);
+
+
+    if(updateError){
+
+      alert(
+        "更新库存失败：" +
+        updateError.message
+      );
+
+      console.error(updateError);
+
+      return;
+
+    }
+
+
+    alert(
+      "入库成功！\n\n" +
+      "当前库存：" +
+      newQuantity
+    );
+
+
+  }else{
+
+    /* 新商品 */
+
+    const {
+      error:insertError
+    } = await supabaseClient
+
+      .from("products")
+
+      .insert({
+
+        sku:sku,
+
+        name:name,
+
+        quantity:quantity,
+
+        location:location || null
+
+      });
+
+
+    if(insertError){
+
+      alert(
+        "创建商品失败：" +
+        insertError.message
+      );
+
+      console.error(insertError);
+
+      return;
+
+    }
+
+
+    alert(
+      "新商品入库成功！"
+    );
+
+  }
+
+
+  $("sku").value = "";
+
+  $("name").value = "";
+
+  $("qty").value = 1;
+
+  $("location").value = "";
+
+
+  setStatus(
+    "☁️ 入库完成，数据已经保存到云端"
+  );
+
+
+  render();
 
 };
 
 
-$("search").oninput=render;
+/* =================================
+   搜索
+   ================================= */
+
+$("search").oninput =
+function(){
+
+  render();
+
+};
 
 
-let scanner;
+/* =================================
+   扫码
+   ================================= */
+
+let scanner = null;
 
 
-$("scan").onclick=async()=>{
+$("scan").onclick =
+async function(){
 
-  if(scanner)return;
+  if(scanner){
+
+    return;
+
+  }
 
 
-  scanner=new Html5Qrcode("reader");
+  scanner =
+    new Html5Qrcode("reader");
 
 
   try{
 
     await scanner.start(
 
-      {facingMode:"environment"},
+      {
+        facingMode:"environment"
+      },
 
       {
+
         fps:10,
+
         qrbox:{
           width:250,
           height:150
         }
+
       },
 
-      code=>{
+      async code => {
 
-        $("sku").value=code;
+        $("sku").value =
+          code;
 
-        scanner.stop();
 
-        scanner=null;
+        await findProduct();
+
+
+        await scanner.stop();
+
+
+        scanner = null;
 
       }
 
     );
 
-  }
 
-  catch(e){
+  }catch(error){
+
+    console.error(error);
+
 
     alert(
       "无法打开摄像头，请允许浏览器使用摄像头。"
     );
 
-    scanner=null;
+
+    scanner = null;
 
   }
 
 };
 
+
+/* =================================
+   启动
+   ================================= */
 
 render();
 
