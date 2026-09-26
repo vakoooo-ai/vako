@@ -188,7 +188,15 @@ button{
 <label>数量</label>
 <input id="qty" type="number" value="1" min="1">
 </div>
+<div>
+<label>进货单价</label>
+<input id="unit_cost" type="number" step="0.01" placeholder="例如：80">
+</div>
 
+<div>
+<label>礼品卡汇率（可选）</label>
+<input id="gift_card_rate" type="number" step="0.0001" placeholder="不使用可留空">
+</div>
 <div>
 <label>仓位</label>
 <input id="location" placeholder="A01">
@@ -782,7 +790,24 @@ async function(){
 
   }
 
+const unitCost = Number($("unit_cost").value || 0);
+const giftCardRate = Number($("gift_card_rate").value || 0);
 
+const { error: batchError } = await supabaseClient
+  .from("inventory_batches")
+  .insert({
+    sku: sku,
+    quantity: quantity,
+    unit_cost: unitCost,
+    gift_card_rate: giftCardRate,
+    location: location || null
+  });
+
+if(batchError){
+  alert("入库批次记录失败：" + batchError.message);
+  console.error(batchError);
+  return;
+}
   $("sku").value = "";
 
   $("name").value = "";
