@@ -180,7 +180,7 @@ button{
 <input id="sku" placeholder="扫描后自动填写">
 
 <label>商品名称</label>
-<input id="name" placeholder="例如：RAM 装饰拖车钩">
+<input id="name" placeholder="例如:SQ40">
 
 <div class="row">
 
@@ -451,7 +451,9 @@ async function render(){
           <br>
 
           库存：
-          <b>${item.quantity}</b>
+<button onclick="changeStock('${item.sku}', -1)">−</button>
+<b>${item.quantity}</b>
+<button onclick="changeStock('${item.sku}', 1)">＋</button>
 
         </div>
 
@@ -892,7 +894,42 @@ async function(){
    启动
    ================================= */
 
-render();
+async function changeStock(sku, delta) {
+  const { data, error } = await supabaseClient
+    .from("products")
+    .select("*")
+    .eq("sku", sku)
+    .limit(1);
+
+  if (error || !data || data.length === 0) {
+    alert("找不到这个商品");
+    return;
+  }
+
+  const product = data[0];
+  const oldQuantity = Number(product.quantity || 0);
+  const newQuantity = oldQuantity + delta;
+
+  if (newQuantity < 0) {
+    alert("库存已经是 0，不能继续出库");
+    return;
+  }
+
+  const { error: updateError } = await supabaseClient
+    .from("products")
+    .update({
+      quantity: newQuantity
+    })
+    .eq("id", product.id);
+
+  if (updateError) {
+    alert("更新库存失败：" + updateError.message);
+    return;
+  }
+
+  await render();
+}
+  render();
 
 </script>
 
