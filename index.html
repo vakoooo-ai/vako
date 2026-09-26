@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>扫码入库</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f6f8;color:#222}
+header{background:#111827;color:white;padding:22px 16px}
+header h1{margin:0;font-size:24px}
+header p{margin:6px 0 0;color:#cbd5e1}
+main{max-width:700px;margin:auto;padding:15px 15px 80px}
+.card{background:white;border-radius:16px;padding:16px;margin-bottom:15px;box-shadow:0 2px 10px #0001}
+h2{font-size:18px;margin:0 0 14px}
+label{display:block;font-size:13px;color:#666;margin:10px 0 5px}
+input,textarea,button{font:inherit}
+input,textarea{width:100%;padding:12px;border:1px solid #ddd;border-radius:10px}
+textarea{min-height:70px}
+button{border:0;border-radius:10px;padding:12px 16px;font-weight:bold}
+.primary{background:#111827;color:white}
+.gray{background:#eef0f3}
+.row{display:flex;gap:10px}
+.row>*{flex:1}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:#f5f6f8;border-radius:10px;padding:12px;text-align:center}
+.stat b{font-size:22px;display:block}
+.stat span{font-size:12px;color:#777}
+.item{border-top:1px solid #eee;padding:12px 0}
+.item:first-child{border-top:0}
+.name{font-weight:bold}
+.meta{font-size:13px;color:#666;line-height:1.7}
+#reader{width:100%;margin-bottom:10px}
+</style>
+</head>
+
+<body>
+
+<header>
+<h1>📦 扫码入库</h1>
+<p>你的库存管理系统</p >
+</header>
+
+<main>
+
+<div class="card">
+<h2>快速入库</h2>
+
+<div id="reader"></div>
+
+<button class="primary" id="scan" style="width:100%">
+📷 扫码
+</button>
+
+<label>SKU / 条码</label>
+<input id="sku" placeholder="扫描后自动填写">
+
+<label>商品名称</label>
+<input id="name" placeholder="例如：RAM 装饰拖车钩">
+
+<div class="row">
+<div>
+<label>数量</label>
+<input id="qty" type="number" value="1" min="1">
+</div>
+
+<div>
+<label>仓位</label>
+<input id="location" placeholder="A01">
+</div>
+</div>
+
+<label>备注</label>
+<textarea id="note" placeholder="颜色、型号等"></textarea>
+
+<button class="primary" id="add" style="width:100%;margin-top:12px">
+＋ 确认入库
+</button>
+
+</div>
+
+<div class="card">
+
+<h2>库存概览</h2>
+
+<div class="stats">
+<div class="stat">
+<b id="types">0</b>
+<span>商品种类</span>
+</div>
+
+<div class="stat">
+<b id="total">0</b>
+<span>库存数量</span>
+</div>
+
+<div class="stat">
+<b id="records">0</b>
+<span>入库记录</span>
+</div>
+</div>
+
+</div>
+
+<div class="card">
+
+<h2>库存</h2>
+
+<input id="search" placeholder="搜索商品或 SKU">
+
+<div id="list"></div>
+
+</div>
+
+</main>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<script>
+
+let data=JSON.parse(localStorage.getItem("inventory")||"[]");
+
+const $=id=>document.getElementById(id);
+
+function save(){
+localStorage.setItem("inventory",JSON.stringify(data));
+render();
+}
+
+function render(){
+
+let map={};
+
+data.forEach(x=>{
+let key=x.sku||x.name;
+
+if(!map[key]){
+map[key]={
+sku:x.sku,
+name:x.name,
+location:x.location,
+qty:0
+};
+}
+
+map[key].qty+=Number(x.qty);
+});
+
+let search=$("search").value.toLowerCase();
+
+let items=Object.values(map).filter(x=>
+(`${x.sku} ${x.name} ${x.location}`)
+.toLowerCase()
+.includes(search)
+);
+
+$("types").textContent=Object.keys(map).length;
+
+$("total").textContent=data.reduce(
+(a,x)=>a+Number(x.qty),0
+);
+
+$("records").textContent=data.length;
+
+$("list").innerHTML=items.length?
+items.map(x=>`
+
+<div class="item">
+
+<div class="name">
+${x.name||"未命名商品"}
+</div>
+
+<div class="meta">
+SKU：${x.sku||"-"}<br>
+仓位：${x.location||"-"}<br>
+库存：<b>${x.qty}</b>
+</div>
+
+</div>
+
+`).join("")
+:
+"<p style='text-align:center;color:#888'>暂无库存</p >";
+}
+
+$("add").onclick=()=>{
+
+let sku=$("sku").value.trim();
+let name=$("name").value.trim();
+let qty=Number($("qty").value);
+
+if(!sku&&!name){
+alert("请输入 SKU 或商品名称");
+return;
+}
+
+if(qty<1){
+alert("数量必须大于0");
+return;
+}
+
+data.unshift({
+
+sku:sku,
+name:name,
+qty:qty,
+location:$("location").value.trim(),
+note:$("note").value.trim(),
+time:new Date().toISOString()
+
+});
+
+save();
+
+$("qty").value=1;
+$("note").value="";
+
+alert("入库成功！");
+};
+
+$("search").oninput=render;
+
+let scanner;
+
+$("scan").onclick=async()=>{
+
+if(scanner)return;
+
+scanner=new Html5Qrcode("reader");
+
+try{
+
+await scanner.start(
+
+{facingMode:"environment"},
+
+{
+fps:10,
+qrbox:{width:250,height:150}
+},
+
+code=>{
+
+$("sku").value=code;
+
+scanner.stop();
+
+scanner=null;
+
+}
+
+);
+
+}catch(e){
+
+alert("无法打开摄像头，请允许浏览器使用摄像头。");
+
+scanner=null;
+
+}
+
+};
+
+render();
+
+</script>
+
+</body>
+</html>
