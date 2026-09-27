@@ -346,7 +346,15 @@ async function render(){
 
   const data =
     await loadInventory();
+const { data: batches, error: batchError } =
+  await supabaseClient
+    .from("inventory_batches")
+    .select("*")
+    .order("created_at", { ascending: false });
 
+if(batchError){
+  console.error(batchError);
+}
 
   let map = {};
 
@@ -381,7 +389,17 @@ async function render(){
 
   });
 
+const batchMap = {};
 
+(batches || []).forEach(batch => {
+
+  if(!batchMap[batch.sku]){
+    batchMap[batch.sku] = [];
+  }
+
+  batchMap[batch.sku].push(batch);
+
+});
   const search =
     $("search").value
       .trim()
@@ -430,10 +448,26 @@ async function render(){
   }
 
 
-  $("list").innerHTML =
+  const {
+  data: batches,
+  error: batchError
+} = await supabaseClient
+  .from("inventory_batches")
+  .select("*")
+  .order("created_at", { ascending: false });
 
-    items.map(item => `
+if(batchError){
+  console.error(batchError);
+}
 
+$("#list").innerHTML =
+  items.map(item => {
+
+    const itemBatches = (batches || []).filter(batch =>
+      String(batch.sku || "") === String(item.sku || "")
+    );
+
+    return `
       <div class="item">
 
         <div class="name">
@@ -446,32 +480,97 @@ async function render(){
 
           SKU：
           ${escapeHtml(
-            item.sku || "-"
+            item.sku || "—"
           )}
 
           <br>
 
           仓位：
           ${escapeHtml(
-            item.location || "-"
+            item.location || "—"
           )}
 
-          <br>
+          <br><br>
 
           库存：
-<button onclick="changeStock('${item.sku}', -1)">−</button>
-<b>${item.quantity}</b>
-<button onclick="changeStock('${item.sku}', 1)">＋</button>
+          <button onclick="changeStock('${item.sku}', -1)">−</button>
+          <b>${item.quantity}</b>
+          <button onclick="changeStock('${item.sku}', 1)">+</button>
+
+        </div>
+
+        <button
+          style="margin-top:12px;width:100%;"
+          onclick="toggleBatches('${item.sku}')"
+        >
+          查看进货批次
+        </button>
+
+        <div
+          id="batches-${item.sku}"
+          style="display:none;margin-top:12px;"
+        >
+
+          ${
+            itemBatches.length === 0
+              ? "<div>暂无进货记录</div>"
+              : itemBatches.map(batch => `
+                
+                <div style="
+                  padding:12px;
+                  margin-top:8px;
+                  background:#f5f6f8;
+                  border-radius:10px;
+                ">
+
+                  <div>
+                    <b>入库日期：</b>
+                    ${new Date(batch.created_at).toLocaleString("zh-CN")}
+                  </div>
+
+                  <div>
+                    <b>数量：</b>
+                    ${Number(batch.quantity || 0)}
+                  </div>
+
+                  <div>
+                    <b>进货价：</b>
+                    $${Number(batch.unit_cost || 0).toFixed(2)}
+                  </div>
+
+                  <div>
+                    <b>礼品卡汇率：</b>
+                    ${Number(batch.gift_card_rate || 0)}
+                  </div>
+
+                </div>
+
+              `).join("")
+          }
 
         </div>
 
       </div>
+    `;
 
-    `).join("");
-
+  }).join("");
 }
 
+function toggleBatches(sku){
 
+  const id = "batches-" + sku;
+
+  const box = document.getElementById(id);
+
+  if(!box) return;
+
+  if(box.style.display === "none"){
+    box.style.display = "block";
+  }else{
+    box.style.display = "none";
+  }
+
+}
 /* =================================
    防止特殊字符
    ================================= */
