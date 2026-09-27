@@ -341,23 +341,34 @@ async function loadInventory(){
 /* =================================
    显示库存
    ================================= */
-
 async function render(){
 
-  const data =
-    await loadInventory();
-const { data: batches, error: batchError } =
-  await supabaseClient
+  const data = await loadInventory();
+
+  /* =========================
+     读取进货批次
+     ========================= */
+
+  const {
+    data: batches,
+    error: batchError
+  } = await supabaseClient
     .from("inventory_batches")
     .select("*")
-    .order("created_at", { ascending: false });
+    .order("created_at", {
+      ascending: false
+    });
 
-if(batchError){
-  console.error(batchError);
-}
+  if(batchError){
+    console.error(batchError);
+  }
+
+
+  /* =========================
+     整理库存
+     ========================= */
 
   let map = {};
-
 
   data.forEach(item => {
 
@@ -366,40 +377,27 @@ if(batchError){
       item.name ||
       item.id;
 
-
     if(!map[key]){
 
       map[key] = {
-
-        sku:item.sku || "",
-
-        name:item.name || "",
-
-        location:item.location || "",
-
-        quantity:0
-
+        sku: item.sku || "",
+        name: item.name || "",
+        location: item.location || "",
+        quantity: 0
       };
 
     }
-
 
     map[key].quantity +=
       Number(item.quantity || 0);
 
   });
 
-const batchMap = {};
 
-(batches || []).forEach(batch => {
+  /* =========================
+     搜索
+     ========================= */
 
-  if(!batchMap[batch.sku]){
-    batchMap[batch.sku] = [];
-  }
-
-  batchMap[batch.sku].push(batch);
-
-});
   const search =
     $("search").value
       .trim()
@@ -409,34 +407,38 @@ const batchMap = {};
   const items =
     Object.values(map).filter(item => {
 
-      return (
+      const text = (
+        String(item.sku || "") + " " +
+        String(item.name || "") + " " +
+        String(item.location || "")
+      ).toLowerCase();
 
-        `${item.sku}
-         ${item.name}
-         ${item.location}`
-
-      )
-      .toLowerCase()
-      .includes(search);
+      return text.includes(search);
 
     });
 
 
+  /* =========================
+     顶部统计
+     ========================= */
+
   $("types").textContent =
     Object.keys(map).length;
 
-
   $("total").textContent =
     data.reduce(
-      (sum,item) =>
+      (sum, item) =>
         sum + Number(item.quantity || 0),
       0
     );
 
-
   $("records").textContent =
     data.length;
 
+
+  /* =========================
+     没有搜索结果
+     ========================= */
 
   if(items.length === 0){
 
@@ -448,64 +450,92 @@ const batchMap = {};
   }
 
 
-  
+  /* =========================
+     显示库存列表
+     ========================= */
 
-$("#list").innerHTML =
-  items.map(item => {
+  $("list").innerHTML =
+    items.map(item => {
 
-    const itemBatches = (batches || []).filter(batch =>
-      String(batch.sku || "") === String(item.sku || "")
-    );
+      const itemBatches =
+        (batches || []).filter(batch =>
+          String(batch.sku || "") ===
+          String(item.sku || "")
+        );
 
-    return `
-      <div class="item">
 
-        <div class="name">
-          ${escapeHtml(
-            item.name || "未命名商品"
-          )}
-        </div>
+      const safeSku =
+        encodeURIComponent(
+          String(item.sku || "")
+        );
 
-        <div class="meta">
 
-          SKU：
-          ${escapeHtml(
-            item.sku || "—"
-          )}
+      return `
+        <div class="item">
 
-          <br>
+          <div class="name">
+            ${escapeHtml(
+              item.name || "未命名商品"
+            )}
+          </div>
 
-          仓位：
-          ${escapeHtml(
-            item.location || "—"
-          )}
+          <div class="meta">
 
-          <br><br>
+            SKU：
+            ${escapeHtml(
+              item.sku || "—"
+            )}
 
-          库存：
-          <button onclick="changeStock('${item.sku}', -1)">−</button>
-          <b>${item.quantity}</b>
-          <button onclick="changeStock('${item.sku}', 1)">+</button>
+            <br>
 
-        </div>
+            仓位：
+            ${escapeHtml(
+              item.location || "—"
+            )}
 
-        <button
-          style="margin-top:12px;width:100%;"
-          onclick="toggleBatches('${item.sku}')"
-        >
-          查看进货批次
-        </button>
+            <br><br>
 
-        <div
-          id="batches-${item.sku}"
-          style="display:none;margin-top:12px;"
-        >
+            库存：
 
-          ${
-            itemBatches.length === 0
+            <button
+              onclick="changeStock(decodeURIComponent('${safeSku}'), -1)"
+            >
+              −
+            </button>
+
+            <b>
+              ${Number(item.quantity || 0)}
+            </b>
+
+            <button
+              onclick="changeStock(decodeURIComponent('${safeSku}'), 1)"
+            >
+              +
+            </button>
+
+          </div>
+
+
+          <button
+            style="margin-top:12px;width:100%;"
+            onclick="toggleBatches(decodeURIComponent('${safeSku}'))"
+          >
+            查看进货批次
+          </button>
+
+
+          <div
+            id="batches-${safeSku}"
+            style="display:none;margin-top:12px;"
+          >
+
+            ${
+              itemBatches.length === 0
+
               ? "<div>暂无进货记录</div>"
+
               : itemBatches.map(batch => `
-                
+
                 <div style="
                   padding:12px;
                   margin-top:8px;
@@ -515,37 +545,45 @@ $("#list").innerHTML =
 
                   <div>
                     <b>入库日期：</b>
-                    ${new Date(batch.created_at).toLocaleString("zh-CN")}
+                    ${new Date(
+                      batch.created_at
+                    ).toLocaleString("zh-CN")}
                   </div>
 
                   <div>
                     <b>数量：</b>
-                    ${Number(batch.quantity || 0)}
+                    ${Number(
+                      batch.quantity || 0
+                    )}
                   </div>
 
                   <div>
                     <b>进货价：</b>
-                    $${Number(batch.unit_cost || 0).toFixed(2)}
+                    $${Number(
+                      batch.unit_cost || 0
+                    ).toFixed(2)}
                   </div>
 
                   <div>
                     <b>礼品卡汇率：</b>
-                    ${Number(batch.gift_card_rate || 0)}
+                    ${Number(
+                      batch.gift_card_rate || 0
+                    )}
                   </div>
 
                 </div>
 
               `).join("")
-          }
+            }
+
+          </div>
 
         </div>
+      `;
 
-      </div>
-    `;
+    }).join("");
 
-  }).join("");
 }
-
 function toggleBatches(sku){
 
   const id = "batches-" + sku;
