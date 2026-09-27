@@ -448,17 +448,7 @@ const batchMap = {};
   }
 
 
-  const {
-  data: batches,
-  error: batchError
-} = await supabaseClient
-  .from("inventory_batches")
-  .select("*")
-  .order("created_at", { ascending: false });
-
-if(batchError){
-  console.error(batchError);
-}
+  
 
 $("#list").innerHTML =
   items.map(item => {
